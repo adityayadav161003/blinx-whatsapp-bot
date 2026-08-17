@@ -12,6 +12,23 @@ const app = express();
 app.use(express.json());
 
 const LEADS_FILE = path.join(__dirname, "leads.jsonl");
+const ENGAGED_USERS_FILE = path.join(__dirname, "engaged_users.csv");
+
+// Ensure the engaged users CSV has a header row
+if (!fs.existsSync(ENGAGED_USERS_FILE)) {
+  fs.writeFileSync(ENGAGED_USERS_FILE, "phone_number\n");
+}
+
+// Track which users have already been logged (to avoid duplicates)
+const loggedEngagedUsers = new Set();
+// Pre-load already-logged numbers from the CSV on startup
+try {
+  const existing = fs.readFileSync(ENGAGED_USERS_FILE, "utf-8");
+  for (const line of existing.split("\n")) {
+    const trimmed = line.trim();
+    if (trimmed && trimmed !== "phone_number") loggedEngagedUsers.add(trimmed);
+  }
+} catch {}
 
 // ---------- 1. Webhook verification (Meta calls this once when you connect it) ----------
 app.get("/webhook", (req, res) => {
@@ -48,6 +65,15 @@ app.post("/webhook", async (req, res) => {
     await markAsRead(message.id).catch(() => {});
 
     const session = appendMessage(from, "user", userText);
+
+    // --- Engagement tracking: log phone number after 3 user messages ---
+    const userMsgCount = session.history.filter(m => m.role === "user").length;
+    if (userMsgCount >= 3 && !loggedEngagedUsers.has(from)) {
+      loggedEngagedUsers.add(from);
+      fs.appendFileSync(ENGAGED_USERS_FILE, from + "\n");
+      console.log(`[ENGAGED] Logged phone number: ${from}`);
+    }
+
     const { replyText, actions } = await getBotResponse(session.history);
     appendMessage(from, "assistant", replyText);
 
@@ -75,6 +101,12 @@ async function handleAction(from, action) {
     await sendText(from, "No problem — I've flagged this for our team and someone will jump in shortly. You can also keep chatting with me in the meantime.");
     await logLead(from, "human_handoff", action.input);
     await notifyTeam(`🙋 Human handoff requested by ${from}: ${action.input.reason}`);
+  }
+
+  if (action.name === "request_call") {
+    await sendText(from, "Absolutely! Our team has been notified and we will get back to you as soon as we can. Thank you for reaching out to Blinx! 🙏");
+    await logLead(from, "call_requested", action.input);
+    await notifyTeam(`📞 URGENT — Call requested by ${from}: ${action.input.reason}`);
   }
 
   if (action.name === "capture_lead") {
