@@ -85,7 +85,46 @@ app.post("/webhook", async (req, res) => {
       return;
     }
 
-    const { replyText, actions } = await getBotResponse(session.history);
+    let { replyText, actions } = await getBotResponse(session.history);
+
+    // --- Deterministic Scheduling Guarantee ---
+    const lowerUserText = userText.trim().toLowerCase();
+    const scheduleKeywords = [
+      "schedule meeting", "schedule a meeting", "schedule call", "schedule a call",
+      "book meeting", "book a meeting", "book call", "book a call", "book a slot",
+      "calendly", "want a meeting", "want to meet", "set up a call", "setup a call",
+      "let's meet", "lets meet", "schedule meet"
+    ];
+    const userWantsMeeting = scheduleKeywords.some(kw => lowerUserText.includes(kw));
+    const aiMentionsInvite = replyText && (
+      replyText.toLowerCase().includes("send over a meeting invite") ||
+      replyText.toLowerCase().includes("schedule a meeting for you") ||
+      replyText.toLowerCase().includes("schedule a call for you") ||
+      replyText.toLowerCase().includes("set up a call for you") ||
+      replyText.toLowerCase().includes("arrange that call")
+    );
+
+    if ((userWantsMeeting || aiMentionsInvite) && !actions.some(a => a.name === "schedule_meeting")) {
+      actions.push({
+        name: "schedule_meeting",
+        input: { context_summary: userText },
+      });
+      if (aiMentionsInvite) {
+        replyText = "";
+      }
+    }
+
+    // --- Deterministic Call Request Guarantee ---
+    const callKeywords = ["request a call", "request call", "call me", "give me a call", "can you call me", "please call me"];
+    const userWantsCall = callKeywords.some(kw => lowerUserText.includes(kw));
+    if (userWantsCall && !actions.some(a => a.name === "request_call")) {
+      actions.push({
+        name: "request_call",
+        input: { reason: userText },
+      });
+      replyText = "";
+    }
+
     if (replyText && replyText.trim()) {
       appendMessage(from, "assistant", replyText);
       await sendText(from, replyText);
