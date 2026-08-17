@@ -141,7 +141,9 @@ app.post("/webhook", async (req, res) => {
 // ---------- 3. Action handlers ----------
 async function handleAction(from, action) {
   if (action.name === "schedule_meeting") {
-    const calendlyUrl = process.env.CALENDLY_LINK || "https://calendly.com/blinxlab-official/30min";
+    const baseCalendlyUrl = process.env.CALENDLY_LINK || "https://calendly.com/blinxlab-official/30min";
+    const separator = baseCalendlyUrl.includes("?") ? "&" : "?";
+    const calendlyUrl = `${baseCalendlyUrl}${separator}utm_term=${from}`;
     await sendButtons(from, `Here's our booking link — pick a slot that works for you:\n${calendlyUrl}`, [
       { id: "confirm_booked", title: "I've booked it" },
     ]).catch(() => sendText(from, `Book a slot here: ${calendlyUrl}`));
@@ -184,6 +186,44 @@ async function notifyTeam(text) {
     console.error("Failed to notify team:", err.message);
   }
 }
+
+// ---------- 5. Calendly Webhook (Automatic WhatsApp confirmation) ----------
+app.post("/calendly-webhook", async (req, res) => {
+  res.sendStatus(200);
+
+  try {
+    const payload = req.body?.payload;
+    if (!payload) return;
+
+    const inviteeName = payload.name || "there";
+    const inviteeEmail = payload.email;
+
+    // 1. Check utm_term tracking for user's WhatsApp number
+    let phoneNumber = payload.tracking?.utm_term;
+
+    // 2. Check questions_and_answers for phone number
+    if (!phoneNumber && payload.questions_and_answers) {
+      for (const qa of payload.questions_and_answers) {
+        const cleaned = (qa.answer || "").replace(/\D/g, "");
+        if (cleaned.length >= 10) {
+          phoneNumber = cleaned.length === 10 ? `91${cleaned}` : cleaned;
+          break;
+        }
+      }
+    }
+
+    if (phoneNumber) {
+      const confirmText = `Awesome ${inviteeName}! 🎉 Your 30-minute strategy call with Blinx Lab is officially confirmed on our calendar. Our team is excited to connect with you! Feel free to ask any other questions here in the meantime.`;
+      await sendText(phoneNumber, confirmText);
+      await logLead(phoneNumber, "calendly_auto_confirmed", { name: inviteeName, email: inviteeEmail });
+      await notifyTeam(`🎉 Auto-confirmed Calendly booking on WhatsApp for ${inviteeName} (+${phoneNumber})!`);
+    } else {
+      await notifyTeam(`📅 New Calendly booking received for ${inviteeName} (${inviteeEmail})!`);
+    }
+  } catch (err) {
+    console.error("Error processing Calendly webhook:", err.message);
+  }
+});
 
 app.get("/", (_req, res) => res.send("Blinx WhatsApp bot is running."));
 
