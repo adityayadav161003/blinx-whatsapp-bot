@@ -283,6 +283,12 @@ app.get("/test-email", async (req, res) => {
     status: result.success ? "success" : "failed",
     details: result,
     toEmail: to,
+    hasResend: Boolean(
+      process.env.RESEND_API_KEY ||
+      process.env.RESEND_KEY ||
+      process.env.resend_api_key ||
+      process.env.RESEND
+    ),
     gmailUser: process.env.GMAIL_USER || "blinxlab.official@gmail.com",
     hasPassword: Boolean(process.env.GMAIL_APP_PASSWORD),
   });
