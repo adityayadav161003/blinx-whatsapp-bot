@@ -75,9 +75,10 @@ app.post("/webhook", async (req, res) => {
     }
 
     const { replyText, actions } = await getBotResponse(session.history);
-    appendMessage(from, "assistant", replyText);
-
-    await sendText(from, replyText);
+    if (replyText && replyText.trim()) {
+      appendMessage(from, "assistant", replyText);
+      await sendText(from, replyText);
+    }
 
     for (const action of actions) {
       await handleAction(from, action);
