@@ -74,6 +74,17 @@ app.post("/webhook", async (req, res) => {
       console.log(`[ENGAGED] Logged phone number: ${from}`);
     }
 
+    // --- Instant verification when user confirms booking on WhatsApp ---
+    if (message.interactive?.button_reply?.id === "confirm_booked" || userText.trim().toLowerCase() === "i've booked it") {
+      const confirmText = "Awesome! 🎉 Your meeting is confirmed on our calendar. Our team is excited to connect with you! Feel free to ask any other questions here in the meantime.";
+      appendMessage(from, "user", userText);
+      appendMessage(from, "assistant", confirmText);
+      await sendText(from, confirmText);
+      await logLead(from, "booking_confirmed_by_user", { status: "confirmed" });
+      await notifyTeam(`🎉 Booking confirmed by client ${from} on WhatsApp!`);
+      return;
+    }
+
     const { replyText, actions } = await getBotResponse(session.history);
     if (replyText && replyText.trim()) {
       appendMessage(from, "assistant", replyText);
