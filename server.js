@@ -7,6 +7,8 @@ const axios = require("axios");
 const { getBotResponse } = require("./lib/llm");
 const { sendText, sendButtons, markAsRead } = require("./lib/whatsapp");
 const { getSession, appendMessage } = require("./lib/session");
+const { sendBookingConfirmationEmail } = require("./lib/mailer");
+const { generateBookingEmail } = require("./lib/emailTemplate");
 
 const app = express();
 app.use(express.json());
@@ -212,6 +214,27 @@ app.post("/calendly-webhook", async (req, res) => {
       }
     }
 
+    // Send Custom HTML Email to invitee
+    if (inviteeEmail) {
+      const scheduledEvent = payload.scheduled_event;
+      const startTime = scheduledEvent?.start_time
+        ? new Date(scheduledEvent.start_time).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "full", timeStyle: "short" })
+        : "Confirmed Time";
+      const meetLink = scheduledEvent?.location?.join_url || "https://meet.google.com";
+      const rescheduleLink = payload.reschedule_url || "https://calendly.com/blinxlab-official/30min";
+      const cancelLink = payload.cancel_url || "https://calendly.com/blinxlab-official/30min";
+
+      await sendBookingConfirmationEmail({
+        toEmail: inviteeEmail,
+        inviteeName,
+        meetingTitle: scheduledEvent?.name || "30-Minute Strategy Session",
+        dateTime: startTime,
+        meetLink,
+        rescheduleLink,
+        cancelLink,
+      }).catch(err => console.error("Error sending custom email:", err.message));
+    }
+
     if (phoneNumber) {
       const confirmText = `Awesome ${inviteeName}! 🎉 Your 30-minute strategy call with Blinx Lab is officially confirmed on our calendar. Our team is excited to connect with you! Feel free to ask any other questions here in the meantime.`;
       await sendText(phoneNumber, confirmText);
@@ -223,6 +246,20 @@ app.post("/calendly-webhook", async (req, res) => {
   } catch (err) {
     console.error("Error processing Calendly webhook:", err.message);
   }
+});
+
+// Live preview of the custom HTML email template
+app.get("/preview-email", (_req, res) => {
+  const html = generateBookingEmail({
+    inviteeName: "Aditya",
+    meetingTitle: "30-Minute Strategy Session",
+    dateTime: "Thursday, August 20, 2026 at 11:30 AM IST",
+    meetLink: "https://meet.google.com/blinx-lab-strategy",
+    rescheduleLink: "https://calendly.com/blinxlab-official/30min",
+    cancelLink: "https://calendly.com/blinxlab-official/30min",
+  });
+  res.setHeader("Content-Type", "text/html");
+  res.send(html);
 });
 
 app.get("/", (_req, res) => res.send("Blinx WhatsApp bot is running."));
