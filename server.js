@@ -267,6 +267,27 @@ app.get("/preview-email", (_req, res) => {
   res.send(html);
 });
 
+// Diagnostic route to test sending custom HTML email directly
+app.get("/test-email", async (req, res) => {
+  const to = req.query.to || "adity6946@gmail.com";
+  const result = await sendBookingConfirmationEmail({
+    toEmail: to,
+    inviteeName: "Aditya",
+    meetingTitle: "30-Minute Strategy Session",
+    dateTime: "Thursday, August 20, 2026 at 11:30 AM IST",
+    meetLink: "https://meet.google.com/axv-kwyn-cyk",
+    rescheduleLink: "https://calendly.com/blinxlab-official/30min",
+    cancelLink: "https://calendly.com/blinxlab-official/30min",
+  });
+  res.json({
+    status: result.success ? "success" : "failed",
+    details: result,
+    toEmail: to,
+    gmailUser: process.env.GMAIL_USER || "blinxlab.official@gmail.com",
+    hasPassword: Boolean(process.env.GMAIL_APP_PASSWORD),
+  });
+});
+
 app.get("/", (_req, res) => res.send("Blinx WhatsApp bot is running."));
 
 const PORT = process.env.PORT || 3000;
