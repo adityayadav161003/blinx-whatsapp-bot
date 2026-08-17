@@ -194,8 +194,12 @@ app.post("/calendly-webhook", async (req, res) => {
   res.sendStatus(200);
 
   try {
+    console.log(`[CALENDLY WEBHOOK] Received event: ${req.body?.event}`);
     const payload = req.body?.payload;
-    if (!payload) return;
+    if (!payload) {
+      console.log("[CALENDLY WEBHOOK] Empty payload received");
+      return;
+    }
 
     const inviteeName = payload.name || "there";
     const inviteeEmail = payload.email;
@@ -224,6 +228,7 @@ app.post("/calendly-webhook", async (req, res) => {
       const rescheduleLink = payload.reschedule_url || "https://calendly.com/blinxlab-official/30min";
       const cancelLink = payload.cancel_url || "https://calendly.com/blinxlab-official/30min";
 
+      console.log(`[CALENDLY WEBHOOK] Dispatching custom HTML email to ${inviteeEmail}...`);
       await sendBookingConfirmationEmail({
         toEmail: inviteeEmail,
         inviteeName,
@@ -232,7 +237,7 @@ app.post("/calendly-webhook", async (req, res) => {
         meetLink,
         rescheduleLink,
         cancelLink,
-      }).catch(err => console.error("Error sending custom email:", err.message));
+      }).catch(err => console.error("[CALENDLY WEBHOOK] Error sending custom email:", err.message));
     }
 
     if (phoneNumber) {
