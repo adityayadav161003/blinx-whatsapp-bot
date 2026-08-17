@@ -91,7 +91,7 @@ app.post("/webhook", async (req, res) => {
 // ---------- 3. Action handlers ----------
 async function handleAction(from, action) {
   if (action.name === "schedule_meeting") {
-    const calendlyUrl = process.env.CALENDLY_LINK || "https://calendly.com/adity6946/30min";
+    const calendlyUrl = process.env.CALENDLY_LINK || "https://calendly.com/blinxlab-official/30min";
     await sendButtons(from, `Here's our booking link — pick a slot that works for you:\n${calendlyUrl}`, [
       { id: "confirm_booked", title: "I've booked it" },
     ]).catch(() => sendText(from, `Book a slot here: ${calendlyUrl}`));
