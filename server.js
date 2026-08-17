@@ -294,6 +294,24 @@ app.get("/test-email", async (req, res) => {
   });
 });
 
+// Endpoint to view/download engaged_users.csv
+app.get("/engaged-users", (_req, res) => {
+  if (fs.existsSync(ENGAGED_USERS_FILE)) {
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.send(fs.readFileSync(ENGAGED_USERS_FILE, "utf-8"));
+  } else {
+    res.status(404).send("No engaged users logged yet.");
+  }
+});
+
+app.get("/engaged_users.csv", (_req, res) => {
+  if (fs.existsSync(ENGAGED_USERS_FILE)) {
+    res.download(ENGAGED_USERS_FILE, "engaged_users.csv");
+  } else {
+    res.status(404).send("No engaged users logged yet.");
+  }
+});
+
 app.get("/", (_req, res) => res.send("Blinx WhatsApp bot is running."));
 
 const PORT = process.env.PORT || 3000;
