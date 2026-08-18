@@ -294,23 +294,183 @@ app.get("/test-email", async (req, res) => {
   });
 });
 
-// Endpoint to view/download engaged_users.csv
-app.get("/engaged-users", (_req, res) => {
+// Helper to aggregate all leads and statuses into a clean CRM list
+function getCRMData() {
+  const crmMap = new Map();
+
+  // 1. Add engaged users (chat activity)
   if (fs.existsSync(ENGAGED_USERS_FILE)) {
-    res.setHeader("Content-Type", "text/plain; charset=utf-8");
-    res.send(fs.readFileSync(ENGAGED_USERS_FILE, "utf-8"));
-  } else {
-    res.status(404).send("No engaged users logged yet.");
+    try {
+      const lines = fs.readFileSync(ENGAGED_USERS_FILE, "utf-8").split("\n");
+      for (const line of lines) {
+        const phone = line.trim();
+        if (phone && phone !== "phone_number") {
+          crmMap.set(phone, {
+            phone,
+            name: "Prospect",
+            email: "—",
+            status: "💬 High Engagement (3+ Messages)",
+            details: "Active conversation on WhatsApp",
+            timestamp: "Recently",
+          });
+        }
+      }
+    } catch {}
   }
+
+  // 2. Add structured leads from leads.jsonl
+  if (fs.existsSync(LEADS_FILE)) {
+    try {
+      const lines = fs.readFileSync(LEADS_FILE, "utf-8").split("\n");
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const entry = JSON.parse(line.trim());
+          const phone = entry.from;
+          const existing = crmMap.get(phone) || { phone, name: "Prospect", email: "—", details: "—" };
+
+          if (entry.type === "calendly_auto_confirmed") {
+            existing.status = "🎉 CONFIRMED (Booked on Calendly)";
+            existing.name = entry.data?.name || existing.name;
+            existing.email = entry.data?.email || existing.email;
+            existing.details = "Meeting confirmed on calendar";
+          } else if (entry.type === "meeting_requested") {
+            if (!existing.status || !existing.status.includes("CONFIRMED")) {
+              existing.status = "⏳ Meeting Link Sent (Pending Booking)";
+              existing.details = entry.data?.context_summary || existing.details;
+            }
+          } else if (entry.type === "call_requested") {
+            existing.status = "📞 Phone Call Requested";
+            existing.details = entry.data?.reason || existing.details;
+          } else if (entry.type === "lead_captured") {
+            existing.details = entry.data?.need_summary || existing.details;
+          }
+
+          existing.timestamp = entry.timestamp ? new Date(entry.timestamp).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : existing.timestamp;
+          crmMap.set(phone, existing);
+        } catch {}
+      }
+    } catch {}
+  }
+
+  return Array.from(crmMap.values());
+}
+
+// Live CRM Dashboard
+app.get("/crm", (_req, res) => {
+  const leads = getCRMData();
+  const confirmedCount = leads.filter(l => l.status.includes("CONFIRMED")).length;
+  const pendingCount = leads.filter(l => l.status.includes("Pending") || l.status.includes("High Engagement")).length;
+  const callCount = leads.filter(l => l.status.includes("Call")).length;
+
+  const rows = leads.map((l, i) => `
+    <tr style="border-bottom: 1px solid #222;">
+      <td style="padding: 14px 16px; color: #888;">${i + 1}</td>
+      <td style="padding: 14px 16px; font-weight: 700; color: #fff;">
+        +${l.phone}
+        <a href="https://wa.me/${l.phone}" target="_blank" style="margin-left: 8px; font-size: 12px; background: #25D366; color: #000; padding: 3px 8px; border-radius: 4px; text-decoration: none; font-weight: 700;">Chat on WhatsApp ↗</a>
+      </td>
+      <td style="padding: 14px 16px; color: #fff;">${l.name}</td>
+      <td style="padding: 14px 16px; color: #888;">${l.email}</td>
+      <td style="padding: 14px 16px;">
+        <span style="display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; ${
+          l.status.includes("CONFIRMED") ? "background: #123820; color: #4ade80;" :
+          l.status.includes("Call") ? "background: #3b2210; color: #fb923c;" :
+          "background: #1e293b; color: #38bdf8;"
+        }">${l.status}</span>
+      </td>
+      <td style="padding: 14px 16px; color: #aaa; font-size: 13px;">${l.details}</td>
+      <td style="padding: 14px 16px; color: #666; font-size: 12px;">${l.timestamp}</td>
+    </tr>
+  `).join("");
+
+  const html = `<!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blinx Lab • Client CRM & Lead Pipeline</title>
+    <style>
+      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0a; color: #fff; margin: 0; padding: 24px; }
+      .container { max-width: 1200px; margin: 0 auto; }
+      .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid #222; }
+      .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+      .stat-card { background: #141414; border: 1px solid #262626; border-radius: 12px; padding: 18px; }
+      .stat-val { font-size: 28px; font-weight: 900; color: #fff; margin-top: 4px; }
+      .stat-label { font-size: 12px; text-transform: uppercase; color: #888; letter-spacing: 1px; font-weight: 700; }
+      .btn-download { background: linear-gradient(135deg, #ff3366, #d60045); color: #fff; padding: 10px 18px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 14px; }
+      table { width: 100%; border-collapse: collapse; background: #141414; border-radius: 12px; overflow: hidden; border: 1px solid #262626; }
+      th { text-align: left; padding: 14px 16px; background: #1c1c1c; color: #888; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <div>
+          <h1 style="margin: 0; font-size: 26px;">blin<span style="color:#ff3366;">x</span><span style="color:#f5b041;">_</span> Client Pipeline</h1>
+          <p style="margin: 4px 0 0; color: #888; font-size: 14px;">Live WhatsApp Inquiries &amp; Booking Conversion Tracking</p>
+        </div>
+        <a href="/leads.csv" class="btn-download">⬇ Export CSV (Excel / Sheets)</a>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Total Prospects</div>
+          <div class="stat-val">${leads.length}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Confirmed Bookings</div>
+          <div class="stat-val" style="color: #4ade80;">${confirmedCount}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Pending Conversions</div>
+          <div class="stat-val" style="color: #38bdf8;">${pendingCount}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Call Requests</div>
+          <div class="stat-val" style="color: #fb923c;">${callCount}</div>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Phone &amp; Direct Chat</th>
+            <th>Client Name</th>
+            <th>Email</th>
+            <th>Status</th>
+            <th>Interest / Details</th>
+            <th>Last Active</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.length > 0 ? rows : '<tr><td colspan="7" style="padding: 30px; text-align: center; color: #666;">No leads captured yet. Send a test message on WhatsApp!</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+  </body>
+  </html>`;
+
+  res.setHeader("Content-Type", "text/html");
+  res.send(html);
 });
 
-app.get("/engaged_users.csv", (_req, res) => {
-  if (fs.existsSync(ENGAGED_USERS_FILE)) {
-    res.download(ENGAGED_USERS_FILE, "engaged_users.csv");
-  } else {
-    res.status(404).send("No engaged users logged yet.");
+// CSV Export Endpoint
+app.get("/leads.csv", (_req, res) => {
+  const leads = getCRMData();
+  let csv = "phone_number,name,email,status,interest_details,last_active\n";
+  for (const l of leads) {
+    csv += `"${l.phone}","${l.name}","${l.email}","${l.status}","${l.details.replace(/"/g, '""')}","${l.timestamp}"\n`;
   }
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader("Content-Disposition", 'attachment; filename="blinx_leads_crm.csv"');
+  res.send(csv);
 });
+
+app.get("/leads", (_req, res) => res.redirect("/crm"));
+app.get("/engaged-users", (_req, res) => res.redirect("/crm"));
+app.get("/engaged_users.csv", (_req, res) => res.redirect("/leads.csv"));
 
 app.get("/", (_req, res) => res.send("Blinx WhatsApp bot is running."));
 
