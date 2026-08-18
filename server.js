@@ -218,27 +218,9 @@ app.post("/calendly-webhook", async (req, res) => {
       }
     }
 
-    // Send Custom HTML Email to invitee
-    if (inviteeEmail) {
-      const scheduledEvent = payload.scheduled_event;
-      const startTime = scheduledEvent?.start_time
-        ? new Date(scheduledEvent.start_time).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "full", timeStyle: "short" })
-        : "Confirmed Time";
-      const meetLink = scheduledEvent?.location?.join_url || "https://meet.google.com";
-      const rescheduleLink = payload.reschedule_url || "https://calendly.com/blinxlab-official/30min";
-      const cancelLink = payload.cancel_url || "https://calendly.com/blinxlab-official/30min";
-
-      console.log(`[CALENDLY WEBHOOK] Dispatching custom HTML email to ${inviteeEmail}...`);
-      await sendBookingConfirmationEmail({
-        toEmail: inviteeEmail,
-        inviteeName,
-        meetingTitle: scheduledEvent?.name || "30-Minute Strategy Session",
-        dateTime: startTime,
-        meetLink,
-        rescheduleLink,
-        cancelLink,
-      }).catch(err => console.error("[CALENDLY WEBHOOK] Error sending custom email:", err.message));
-    }
+    // Client chooses slot on Calendly -> Calendly & Google Calendar send the official invitation.
+    // We log the lead into CRM and send the instant WhatsApp confirmation to ensure exactly 1 email is delivered!
+    console.log(`[CALENDLY WEBHOOK] Booking confirmed for ${inviteeName} (${inviteeEmail})`);
 
     if (phoneNumber) {
       const confirmText = `Awesome ${inviteeName}! 🎉 Your 30-minute strategy call with Blinx Lab is officially confirmed on our calendar. Our team is excited to connect with you! Feel free to ask any other questions here in the meantime.`;
