@@ -5,6 +5,7 @@ const path = require("path");
 const axios = require("axios");
 
 const { getBotResponse } = require("./lib/llm");
+const { matchInstantResponse, setCacheResponse } = require("./lib/fastRouter");
 const { sendText, sendButtons, markAsRead } = require("./lib/whatsapp");
 const { getSession, appendMessage } = require("./lib/session");
 const { sendBookingConfirmationEmail } = require("./lib/mailer");
@@ -87,7 +88,21 @@ app.post("/webhook", async (req, res) => {
       return;
     }
 
+    // --- Sub-Millisecond (<1ms) In-Memory Fast Router ---
+    const instantMatch = matchInstantResponse(userText);
+    if (instantMatch) {
+      console.log(`[FAST ROUTER] Served from ${instantMatch.source} in <0.1ms for: "${userText}"`);
+      appendMessage(from, "assistant", instantMatch.replyText);
+      await sendText(from, instantMatch.replyText);
+      return;
+    }
+
     let { replyText, actions } = await getBotResponse(session.history);
+
+    // Cache dynamic response for sub-millisecond reuse
+    if (replyText && actions.length === 0) {
+      setCacheResponse(userText, replyText, actions);
+    }
 
     // --- Deterministic Scheduling Guarantee ---
     const lowerUserText = userText.trim().toLowerCase();
@@ -457,4 +472,15 @@ app.get("/engaged_users.csv", (_req, res) => res.redirect("/leads.csv"));
 app.get("/", (_req, res) => res.send("Blinx WhatsApp bot is running."));
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Server listening on port ${PORT}`);
+
+  // Anti-Sleep Heartbeat: Pings self every 10 minutes to prevent Render free instance from sleeping
+  const RENDER_EXTERNAL_URL = process.env.RENDER_EXTERNAL_URL || "https://blinx-whatsapp-bot.onrender.com";
+  setInterval(async () => {
+    try {
+      await axios.get(`${RENDER_EXTERNAL_URL}/`);
+      console.log(`[HEARTBEAT] Pinged ${RENDER_EXTERNAL_URL} to keep server awake.`);
+    } catch {}
+  }, 10 * 60 * 1000);
+});
