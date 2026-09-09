@@ -161,9 +161,14 @@ async function handleAction(from, action) {
     const baseCalendlyUrl = process.env.CALENDLY_LINK || "https://calendly.com/blinxlab-official/30min";
     const separator = baseCalendlyUrl.includes("?") ? "&" : "?";
     const calendlyUrl = `${baseCalendlyUrl}${separator}utm_term=${from}`;
-    await sendButtons(from, `Here's our booking link — pick a slot that works for you:\n${calendlyUrl}`, [
-      { id: "confirm_booked", title: "I've booked it" },
-    ]).catch(() => sendText(from, `Book a slot here: ${calendlyUrl}`));
+
+    // 1. Send dedicated direct clickable URL with rich preview
+    await sendText(from, `📅 *Here is your live booking link:*\n👉 ${calendlyUrl}\n\nPick any 30-minute slot that works best for you!`);
+    // 2. Send follow-up confirmation button
+    await sendButtons(from, "Once you pick your slot on the link above, tap below:", [
+      { id: "confirm_booked", title: "I've booked it 🎉" },
+    ]).catch(() => {});
+
     await logLead(from, "meeting_requested", action.input);
     await notifyTeam(`📅 Meeting requested by ${from}: ${action.input.context_summary}`);
   }
