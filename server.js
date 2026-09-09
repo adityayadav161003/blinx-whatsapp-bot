@@ -6,7 +6,7 @@ const axios = require("axios");
 
 const { getBotResponse } = require("./lib/llm");
 const { matchInstantResponse, setCacheResponse } = require("./lib/fastRouter");
-const { sendText, sendButtons, markAsRead } = require("./lib/whatsapp");
+const { sendText, sendButtons, sendUrlButton, markAsRead } = require("./lib/whatsapp");
 const { getSession, appendMessage } = require("./lib/session");
 const { sendBookingConfirmationEmail } = require("./lib/mailer");
 const { generateBookingEmail } = require("./lib/emailTemplate");
@@ -162,12 +162,18 @@ async function handleAction(from, action) {
     const separator = baseCalendlyUrl.includes("?") ? "&" : "?";
     const calendlyUrl = `${baseCalendlyUrl}${separator}utm_term=${from}`;
 
-    // 1. Send dedicated direct clickable URL with rich preview
-    await sendText(from, `📅 *Here is your live booking link:*\n👉 ${calendlyUrl}\n\nPick any 30-minute slot that works best for you!`);
-    // 2. Send follow-up confirmation button
-    await sendButtons(from, "Once you pick your slot on the link above, tap below:", [
-      { id: "confirm_booked", title: "I've booked it 🎉" },
-    ]).catch(() => {});
+    // Send native WhatsApp CTA URL Action Button (Opens Calendly with 1 tap)
+    await sendUrlButton(
+      from,
+      "Pick any 30-minute slot that fits your schedule. Our team is excited to break down your growth roadmap!",
+      "Book 30-Min Call 📅",
+      calendlyUrl,
+      "Schedule Strategy Session",
+      "Blinx Lab • Creative & Growth"
+    ).catch(async (err) => {
+      console.log("[CTA URL FALLBACK]:", err.message);
+      await sendText(from, `📅 *Here is your live booking link:*\n👉 ${calendlyUrl}\n\nPick any 30-minute slot that works best for you!`);
+    });
 
     await logLead(from, "meeting_requested", action.input);
     await notifyTeam(`📅 Meeting requested by ${from}: ${action.input.context_summary}`);
