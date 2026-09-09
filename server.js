@@ -162,7 +162,7 @@ async function handleAction(from, action) {
     if (baseCalendlyUrl.includes("30min")) {
       baseCalendlyUrl = "https://calendly.com/blinxlab-official/new-meeting";
     }
-    const calendlyUrl = "https://calendly.com/blinxlab-official/new-meeting";
+    const calendlyUrl = `https://calendly.com/blinxlab-official/new-meeting?utm_term=${from}`;
 
     // Send native WhatsApp CTA URL Action Button (Opens Calendly with 1 tap)
     await sendUrlButton(
