@@ -158,9 +158,11 @@ app.post("/webhook", async (req, res) => {
 // ---------- 3. Action handlers ----------
 async function handleAction(from, action) {
   if (action.name === "schedule_meeting") {
-    const baseCalendlyUrl = process.env.CALENDLY_LINK || "https://calendly.com/blinxlab-official/new-meeting";
-    const separator = baseCalendlyUrl.includes("?") ? "&" : "?";
-    const calendlyUrl = `${baseCalendlyUrl}${separator}utm_term=${from}`;
+    let baseCalendlyUrl = process.env.CALENDLY_LINK || "https://calendly.com/blinxlab-official/new-meeting";
+    if (baseCalendlyUrl.includes("30min")) {
+      baseCalendlyUrl = "https://calendly.com/blinxlab-official/new-meeting";
+    }
+    const calendlyUrl = "https://calendly.com/blinxlab-official/new-meeting";
 
     // Send native WhatsApp CTA URL Action Button (Opens Calendly with 1 tap)
     await sendUrlButton(
