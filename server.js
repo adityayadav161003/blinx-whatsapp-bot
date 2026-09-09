@@ -158,7 +158,7 @@ app.post("/webhook", async (req, res) => {
 // ---------- 3. Action handlers ----------
 async function handleAction(from, action) {
   if (action.name === "schedule_meeting") {
-    const baseCalendlyUrl = process.env.CALENDLY_LINK || "https://calendly.com/blinxlab-official/30min";
+    const baseCalendlyUrl = process.env.CALENDLY_LINK || "https://calendly.com/blinxlab-official/new-meeting";
     const separator = baseCalendlyUrl.includes("?") ? "&" : "?";
     const calendlyUrl = `${baseCalendlyUrl}${separator}utm_term=${from}`;
 
@@ -268,8 +268,8 @@ app.get("/preview-email", (_req, res) => {
     meetingTitle: "30-Minute Strategy Session",
     dateTime: "Thursday, August 20, 2026 at 11:30 AM IST",
     meetLink: "https://meet.google.com/blinx-lab-strategy",
-    rescheduleLink: "https://calendly.com/blinxlab-official/30min",
-    cancelLink: "https://calendly.com/blinxlab-official/30min",
+    rescheduleLink: "https://calendly.com/blinxlab-official/new-meeting",
+    cancelLink: "https://calendly.com/blinxlab-official/new-meeting",
   });
   res.setHeader("Content-Type", "text/html");
   res.send(html);
@@ -284,8 +284,8 @@ app.get("/test-email", async (req, res) => {
     meetingTitle: "30-Minute Strategy Session",
     dateTime: "Thursday, August 20, 2026 at 11:30 AM IST",
     meetLink: "https://meet.google.com/axv-kwyn-cyk",
-    rescheduleLink: "https://calendly.com/blinxlab-official/30min",
-    cancelLink: "https://calendly.com/blinxlab-official/30min",
+    rescheduleLink: "https://calendly.com/blinxlab-official/new-meeting",
+    cancelLink: "https://calendly.com/blinxlab-official/new-meeting",
   });
   res.json({
     status: result.success ? "success" : "failed",
